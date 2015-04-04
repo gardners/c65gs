@@ -338,7 +338,7 @@ architecture Behavioral of machine is
       rom_at_e000 : in std_logic;
       rom_at_c000 : in std_logic;
       rom_at_a000 : in std_logic;
-      rom_at_8000 : in std_logic;
+      rom_at_8000 : in std_logic
 
       );
   end component;
