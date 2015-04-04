@@ -101,16 +101,8 @@ entity iomapper is
 
         viciii_iomode : in std_logic_vector(1 downto 0);
         
-        colourram_at_dc00 : in std_logic;
-       
-        ---------------------------------------------------------------------------
-        -- IO port to far call stack
-        ---------------------------------------------------------------------------
-        farcallstack_we : in std_logic;
-        farcallstack_addr : in std_logic_vector(8 downto 0);
-        farcallstack_din : in std_logic_vector(63 downto 0);
-        farcallstack_dout : out std_logic_vector(63 downto 0)
-
+        colourram_at_dc00 : in std_logic
+        
         );
 end iomapper;
 
