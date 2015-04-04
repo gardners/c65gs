@@ -844,7 +844,7 @@ begin
     rom_at_e000 => rom_at_e000,
     rom_at_c000 => rom_at_c000,
     rom_at_a000 => rom_at_a000,
-    rom_at_8000 => rom_at_8000,
+    rom_at_8000 => rom_at_8000
 
 
     );
