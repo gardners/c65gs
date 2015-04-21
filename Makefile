@@ -145,3 +145,13 @@ charrom.vhdl:	pngprepare 8x8font.png
 
 BOOTLOGO.G65:	pngprepare mega65_64x64.png
 	./pngprepare logo mega65_64x64.png BOOTLOGO.G65
+
+nexys4ddr2:	Makefile nexys4ddr2.ucf machine-shared.vhdl container-shared.vhdl container-shared.vhdl
+	cp nexys4ddr2.ucf container.ucf
+	cpp -DNEXYS4DDR2=1 < container-shared.vhdl | grep -v "^#" > container.vhd
+	cpp -DNEXYS4DDR2=1 < machine-shared.vhdl | grep -v "^#" > machine.vhdl
+
+nexys4psram:	Makefile nexys4psram.ucf machine-shared.vhdl container-shared.vhdl container-shared.vhdl
+	cp nexys4psram.ucf container.ucf
+	cpp -DNEXYS4PSRAM=1 < container-shared.vhdl | grep -v "^#" > container.vhd
+	cpp -DNEXYS4PSRAM=1 < machine-shared.vhdl | grep -v "^#" > machine.vhdl

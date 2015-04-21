@@ -107,17 +107,20 @@ entity container is
          ----------------------------------------------------------------------
          -- Cellular RAM interface for Slow RAM
          ----------------------------------------------------------------------
-         --RamCLK : out std_logic;
-         --RamADVn : out std_logic;
-         --RamCEn : out std_logic;
-         --RamCRE : out std_logic;
-         --RamOEn : out std_logic;
-         --RamWEn : out std_logic;
-         --RamUBn : out std_logic;
-         --RamLBn : out std_logic;
-         --RamWait : in std_logic;
-         --MemDB : inout std_logic_vector(15 downto 0);
-         --MemAdr : inout std_logic_vector(22 downto 0);
+#ifdef NEXYS4PSRAM
+         RamCLK : out std_logic;
+         RamADVn : out std_logic;
+         RamCEn : out std_logic;
+         RamCRE : out std_logic;
+         RamOEn : out std_logic;
+         RamWEn : out std_logic;
+         RamUBn : out std_logic;
+         RamLBn : out std_logic;
+         RamWait : in std_logic;
+         MemDB : inout std_logic_vector(15 downto 0);
+         MemAdr : inout std_logic_vector(22 downto 0);
+#endif
+#ifdef NEXYS4DDR2
          ddr2_addr      : out   std_logic_vector(12 downto 0);
          ddr2_ba        : out   std_logic_vector(2 downto 0);
          ddr2_ras_n     : out   std_logic;
@@ -132,7 +135,7 @@ entity container is
          ddr2_dq        : inout std_logic_vector(15 downto 0);
          ddr2_dqs_p     : inout std_logic_vector(1 downto 0);
          ddr2_dqs_n     : inout std_logic_vector(1 downto 0);
-         
+#endif         
          ----------------------------------------------------------------------
          -- Debug interfaces on Nexys4 board
          ----------------------------------------------------------------------
@@ -198,7 +201,7 @@ architecture Behavioral of container is
       -- data cross-clock
       cache_address        : in std_logic_vector(8 downto 0);
       cache_read_data      : out std_logic_vector(150 downto 0);
-      
+
       -- DDR2 interface
       ddr2_addr            : out   std_logic_vector(12 downto 0);
       ddr2_ba              : out   std_logic_vector(2 downto 0);
@@ -367,6 +370,24 @@ architecture Behavioral of container is
   -- XXX We should read the real temperature and feed this to the DDR controller
   -- so that it can update timing whenever the temperature changes too much.
   signal fpga_temperature : std_logic_vector(11 downto 0) := (others => '0');
+
+#ifndef NEXYS4DDR2
+  signal ddr2_addr      : std_logic_vector(12 downto 0);
+  signal ddr2_ba        : std_logic_vector(2 downto 0);
+  signal ddr2_ras_n     : std_logic;
+  signal ddr2_cas_n     : std_logic;
+  signal ddr2_we_n      : std_logic;
+  signal ddr2_ck_p      : std_logic_vector(0 downto 0);
+  signal ddr2_ck_n      : std_logic_vector(0 downto 0);
+  signal ddr2_cke       : std_logic_vector(0 downto 0);
+  signal ddr2_cs_n      : std_logic_vector(0 downto 0);
+  signal ddr2_dm        : std_logic_vector(1 downto 0);
+  signal ddr2_odt       : std_logic_vector(0 downto 0);
+  signal ddr2_dq        : std_logic_vector(15 downto 0);
+  signal ddr2_dqs_p     : std_logic_vector(1 downto 0);
+  signal ddr2_dqs_n     : std_logic_vector(1 downto 0);
+#endif         
+
   
 begin
   
