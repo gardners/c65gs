@@ -12,7 +12,6 @@ port (Clk : in std_logic;
         data_o : out std_logic_vector(7 downto 0);
         data_i : in std_logic_vector(7 downto 0);
 
-        writeclk : in std_logic;
         -- Yes, we do have a write enable, because we allow modification of ROMs
         -- in the running machine, unless purposely disabled.  This gives us
         -- something like the WOM that the Amiga had.
