@@ -1060,7 +1060,7 @@ PROCESS(Clk)
 BEGIN
   data_o <= ram(address);          
 
-  if(rising_edge(writeClk)) then 
+  if(rising_edge(clk)) then 
     if cs='1' then
       ram(address) <= data_i;
     end if;
