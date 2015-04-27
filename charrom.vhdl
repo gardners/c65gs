@@ -1062,10 +1062,8 @@ BEGIN
   data_o <= ram(address);          
 
   if(rising_edge(writeClk)) then 
-    if writecs='1' then
-      if(we='1') then
-        ram(to_integer(writeaddress)) <= data_i;
-      end if;
+    if cs='1' then
+      ram(address) <= data_i;
     end if;
   end if;
 END PROCESS;
