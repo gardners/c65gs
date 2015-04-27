@@ -187,7 +187,9 @@ begin  -- behavioural
         thumbnail_read_address <= (others => '0');
         fastio_rdata(7) <= thumbnail_valid;
         fastio_rdata(6) <= thumbnail_started;
-        fastio_rdata(5 downto 0) <= (others => '0');
+        -- @IO:GS $D630.5 - DEBUG: Video streaming buffer moby
+        fastio_rdata(5) <= output_address_internal(11);
+        fastio_rdata(4 downto 0) <= (others => '0');
       else
         fastio_rdata <= (others => 'Z');
       end if;

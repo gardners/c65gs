@@ -283,6 +283,10 @@ architecture behavioural of ethernet is
  signal eth_key_debug : unsigned(7 downto 0) := x"00";
  signal eth_byte_fail : unsigned(7 downto 0) := x"00";
  signal eth_offset_fail : unsigned(7 downto 0) := x"00";
+ -- count of packets sent
+ signal eth_video_stream_packets : unsigned(7 downto 0) := x"00";
+ signal eth_tx_preambles : unsigned(7 downto 0) := x"00";
+ signal eth_tx_bytes : unsigned(7 downto 0) := x"00";
  
  -- Reverse the input vector.
  function reversed(slv: std_logic_vector) return std_logic_vector is
@@ -442,6 +446,11 @@ begin  -- behavioural
             eth_txen_int <= '1';
             eth_txd <= "01";
             eth_txd_int <= "01";
+            if eth_video_stream_packets /= x"ff" then
+              eth_video_stream_packets <= eth_video_stream_packets + 1;
+            else
+              eth_video_stream_packets <= x"00";
+            end if;    
             eth_tx_state <= WaitBeforeTX;
             eth_tx_viciv <= '1';
           end if;
@@ -466,6 +475,11 @@ begin  -- behavioural
               eth_tx_bits <= x"ff";
               tx_fcs_crc_data_in <= x"ff";
             end if;
+            if eth_tx_preambles /= x"ff" then
+              eth_tx_preambles <= eth_tx_preambles + 1;
+            else
+              eth_tx_preambles <= x"00";
+            end if;    
           else
             eth_txd <= "01";
             eth_txd_int <= "01";
@@ -476,6 +490,12 @@ begin  -- behavioural
         --   Then send 2,048 bytes of data.
         --   eth_tx_state <= SendingFrame
         when SendingFrame =>
+          if eth_tx_bytes /= x"ff" then
+            eth_tx_bytes <= eth_tx_bytes + 1;
+          else
+            eth_tx_bytes <= x"00";
+          end if;    
+
           tx_fcs_crc_d_valid <= '0';
           tx_fcs_crc_calc_en <= '0';
           eth_txd <= eth_tx_bits(1 downto 0);
@@ -896,6 +916,20 @@ begin  -- behavioural
             fastio_rdata(5 downto 4) <= eth_txd_int(1 downto 0);
             fastio_rdata(6) <= eth_tx_viciv;
             fastio_rdata(7) <= rrnet_tx_toggle;
+          when x"5" =>
+            -- $D6E5 - DEBUG: Number of video stream packets sent (tx triggers).
+            fastio_rdata <= eth_video_stream_packets;
+          when x"6" =>
+            -- $D6E5 - DEBUG: Number of video stream packets sent (preambles).
+            fastio_rdata <= eth_tx_preambles;
+          when x"7" =>
+            -- $D6E5 - DEBUG: Number of ethernet bytes sent.
+            fastio_rdata <= eth_tx_bytes;
+          when x"8" =>
+            -- $D6E6 - DEBUG: video streaming state flags
+            fastio_rdata(7) <= buffer_moby_toggle;
+            fastio_rdata(6) <= last_buffer_moby_toggle;
+            fastio_rdata(5 downto 0) <= (others => 'Z');
           when x"b" =>
             fastio_rdata <= eth_tx_size(7 downto 0);
           when x"c" =>

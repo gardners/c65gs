@@ -172,6 +172,7 @@ GS $D5C1 - FPU SIN/COS output register
 GS $D630 - Read to obtain status of thumbnail generator.
 GS $D630 - Write to reset port address for thumbnail generator
 GS $D630-$D631 - Read-only hardware-generated thumbnail of display (accessible only in hypervisor mode)
+GS $D630.5 - DEBUG: Video streaming buffer moby
 GS $D630.6 - Thumbnail drawing was in progress.
 GS $D630.7 - Thumbnail is valid if 1.  Else there has not been a complete frame since elapsed without a trap to hypervisor mode, in which case the thumbnail may not reflect the current process.
 GS $D631 - Read port for thumbnail generator
