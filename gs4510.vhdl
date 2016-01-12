@@ -2216,8 +2216,6 @@ begin
         report "DMAgic read from $" & to_hstring(address);
       end if;
 
-      -- Indicate that we need to buffer read byte
-      dmagic_memory_reading <= '1';      
     end dmagic_schedule_read_value;
 
     variable memory_access_address : unsigned(27 downto 0) := x"FFFFFFF";
@@ -2235,9 +2233,13 @@ begin
         memory_access_resolve_address := dmagic_memory_access_resolve_address;
         memory_access_address := dmagic_memory_access_address;
         memory_access_wdata := dmagic_memory_access_wdata;
-      end if;
+        -- Indicate that we need to buffer read byte
+        dmagic_memory_reading <= not dmagic_memory_access_write;
 
-      dmagic_memory_reading <= '0';
+        report "DMA actioning memory access to $" & to_hstring(dmagic_memory_access_address);
+      else
+        dmagic_memory_reading <= '0';
+      end if;
 
       -- Read data from memory system
       report "DMA dmagic_memory_read_buffer <= $" & to_hstring(read_data);
@@ -3449,16 +3451,6 @@ begin
                   end if;
                 end if;
               end if;
-              -- Do memory read
-              memory_access_read := '1';
-              memory_access_resolve_address := '0';
-              memory_access_address := dmagic_src_addr;
-
-              -- redirect memory write to IO block if required
-              if dmagic_src_addr(15 downto 12) = x"d" and dmagic_src_io='1' then
-                memory_access_address(27 downto 12) := x"FFD3";
-              end if;              
-              state <= DMAgicCopy;
             when InstructionWait =>
               state <= InstructionFetch;
             when InstructionFetch =>
