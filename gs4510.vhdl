@@ -2191,6 +2191,9 @@ begin
       -- redirect memory write to IO block if required
       if address(15 downto 12) = x"d" and dmagic_dest_io='1' then
         dmagic_memory_access_address(27 downto 12) <= x"FFD3";
+        report "DMAgic write $" & to_hstring(value) & " to $FFD3" & to_hstring(address(11 downto 0));
+      else
+        report "DMAgic write $" & to_hstring(value) & " to $" & to_hstring(address);
       end if;
     end dmagic_schedule_write_value;
 
@@ -2198,6 +2201,7 @@ begin
     -- it has been read.
     procedure dmagic_schedule_read_value(address : unsigned(27 downto 0)) is
     begin
+      
       dmagic_memory_access_requested <= '1';
 
       dmagic_memory_access_write <= '0';
@@ -2207,10 +2211,13 @@ begin
       -- redirect memory write to IO block if required
       if address(15 downto 12) = x"d" and dmagic_dest_io='1' then
         dmagic_memory_access_address(27 downto 12) <= x"FFD3";
+        report "DMAgic read from $FFD3" & to_hstring(address(11 downto 0));
+      else
+        report "DMAgic read from $" & to_hstring(address);
       end if;
 
       -- Indicate that we need to buffer read byte
-      dmagic_memory_reading <= '1';
+      dmagic_memory_reading <= '1';      
     end dmagic_schedule_read_value;
 
     variable memory_access_address : unsigned(27 downto 0) := x"FFFFFFF";
@@ -2227,20 +2234,26 @@ begin
         memory_access_read := not dmagic_memory_access_write;
         memory_access_resolve_address := dmagic_memory_access_resolve_address;
         memory_access_address := dmagic_memory_access_address;
-        if dmagic_memory_access_write = '0' then
-          dmagic_memory_reading <= '1';
-        end if;
-      else
-        dmagic_memory_reading <= '0';
+        memory_access_wdata := dmagic_memory_access_wdata;
       end if;
 
+      dmagic_memory_reading <= '0';
+
       -- Read data from memory system
+      report "DMA dmagic_memory_read_buffer <= $" & to_hstring(read_data);
       dmagic_memory_read_buffer <= read_data;
+      report "DMA dmagic_memory_reading="
+        & std_logic'image(dmagic_memory_reading)
+        & ", ready=" & std_logic'image(dmagic_memory_read_buffer_ready)
+        & ", buffered value = $" & to_hstring(dmagic_memory_read_buffer);
       if dmagic_memory_reading = '1' then
         dmagic_memory_read_buffer_ready <= '1';
       else
         dmagic_memory_read_buffer_ready <= '0';
-      end if;              
+      end if;
+
+      dmagic_memory_access_requested <= '0';
+      
     end dmagic_do_memory_access;
     
     procedure alu_op_cmp (
@@ -3376,10 +3389,15 @@ begin
               -- read data, unless we have run out of bytes to read. When we have
               -- written the correct number of bytes, we stop.
 
+              report "DMAgic source addr = $" & to_hstring(dmagic_src_addr);
+              report "DMAgic dest addr = $" & to_hstring(dmagic_dest_addr);
+              
               dmagic_do_memory_access;
                             
               if (dmagic_cmd(1 downto 0) = "11") or
                 (dmagic_memory_read_buffer_ready = '1') then
+                report "DMA dmagic_memory_read_buffer_ready="
+                  & std_logic'image(dmagic_memory_read_buffer_ready);
                 -- Data ready to be written
                 if (dmagic_cmd(1 downto 0) = "11") then -- fill
                   dmagic_schedule_write_value(dmagic_dest_addr,
@@ -3417,6 +3435,7 @@ begin
                 end if;
               else
                 -- Read next byte
+                report "DMAgic source addr = $" & to_hstring(dmagic_src_addr);
                 dmagic_schedule_read_value(dmagic_src_addr);
 
                 -- Update source address.
