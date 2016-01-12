@@ -350,7 +350,15 @@ end component;
   -- Temporary registers used while loading DMA list
   signal dmagic_dest_bank_temp : unsigned(7 downto 0);
   signal dmagic_src_bank_temp : unsigned(7 downto 0);
-
+  -- DMAgic memory pipeline registers
+  signal dmagic_memory_access_requested : std_logic := '0';
+  signal dmagic_memory_access_address : unsigned(27 downto 0);
+  signal dmagic_memory_access_write : std_logic := '0';
+  signal dmagic_memory_access_resolve_address : std_logic;
+  signal dmagic_memory_access_wdata : unsigned(7 downto 0);
+  signal dmagic_memory_reading : std_logic := '0';
+  signal dmagic_memory_read_buffer : unsigned(7 downto 0);
+  signal dmagic_memory_read_buffer_ready : std_logic := '0';
 
   -- CPU internal state
   signal flag_c : std_logic;        -- carry flag
@@ -575,7 +583,7 @@ end component;
     Unmapped
     );
 
-  signal read_source : memory_source;
+  signal read_source : memory_source;  
 
   type processor_state is (
     -- Reset and interrupts
@@ -589,9 +597,7 @@ end component;
     
     -- DMAgic
     DMAgicTrigger,DMAgicReadList,DMAgicGetReady,
-    DMAgicFill,
-    DMAgicCopyRead,DMAgicCopyWrite,
-    DMAgicRead,DMAgicWrite,
+    DMAgicCopy,
 
     -- Normal instructions
     InstructionWait,                    -- Wait for PC to become available on
@@ -2169,6 +2175,74 @@ begin
       map_interrupt_inhibit <= '1';
     end c65_map_instruction;
 
+    -- Delay DMAgic operations by one cycle, so that we can fully resolve
+    -- addresses, and thus flatten the CPU logic a bit, to improve timing.
+
+    -- Writing a value is simple.
+    procedure dmagic_schedule_write_value(address : unsigned(27 downto 0);
+                                          value : unsigned(7 downto 0)) is
+    begin
+      dmagic_memory_access_requested <= '1';
+      dmagic_memory_access_write <= '1';
+      dmagic_memory_access_wdata <= value;
+      dmagic_memory_access_resolve_address <= '0';
+      dmagic_memory_access_address <= address;
+
+      -- redirect memory write to IO block if required
+      if address(15 downto 12) = x"d" and dmagic_dest_io='1' then
+        dmagic_memory_access_address(27 downto 12) <= x"FFD3";
+      end if;
+    end dmagic_schedule_write_value;
+
+    -- Reading a value is also simple, although we need to catch the byte after
+    -- it has been read.
+    procedure dmagic_schedule_read_value(address : unsigned(27 downto 0)) is
+    begin
+      dmagic_memory_access_requested <= '1';
+
+      dmagic_memory_access_write <= '0';
+      dmagic_memory_access_resolve_address <= '0';
+      dmagic_memory_access_address <= address;
+
+      -- redirect memory write to IO block if required
+      if address(15 downto 12) = x"d" and dmagic_dest_io='1' then
+        dmagic_memory_access_address(27 downto 12) <= x"FFD3";
+      end if;
+
+      -- Indicate that we need to buffer read byte
+      dmagic_memory_reading <= '1';
+    end dmagic_schedule_read_value;
+
+    variable memory_access_address : unsigned(27 downto 0) := x"FFFFFFF";
+    variable memory_access_read : std_logic := '0';
+    variable memory_access_write : std_logic := '0';
+    variable memory_access_resolve_address : std_logic := '0';
+    variable memory_access_wdata : unsigned(7 downto 0) := x"FF";
+    
+    procedure dmagic_do_memory_access is
+    begin
+      -- Request memory access if dmagic has requested it
+      if dmagic_memory_access_requested = '1' then
+        memory_access_write := dmagic_memory_access_write;
+        memory_access_read := not dmagic_memory_access_write;
+        memory_access_resolve_address := dmagic_memory_access_resolve_address;
+        memory_access_address := dmagic_memory_access_address;
+        if dmagic_memory_access_write = '0' then
+          dmagic_memory_reading <= '1';
+        end if;
+      else
+        dmagic_memory_reading <= '0';
+      end if;
+
+      -- Read data from memory system
+      dmagic_memory_read_buffer <= read_data;
+      if dmagic_memory_reading = '1' then
+        dmagic_memory_read_buffer_ready <= '1';
+      else
+        dmagic_memory_read_buffer_ready <= '0';
+      end if;              
+    end dmagic_do_memory_access;
+    
     procedure alu_op_cmp (
       i1 : in unsigned(7 downto 0);
       i2 : in unsigned(7 downto 0)) is
@@ -2297,12 +2371,6 @@ begin
     variable execute_arg2 : unsigned(7 downto 0);
 
     variable memory_read_value : unsigned(7 downto 0);
-
-    variable memory_access_address : unsigned(27 downto 0) := x"FFFFFFF";
-    variable memory_access_read : std_logic := '0';
-    variable memory_access_write : std_logic := '0';
-    variable memory_access_resolve_address : std_logic := '0';
-    variable memory_access_wdata : unsigned(7 downto 0) := x"FF";
 
     variable pc_inc : std_logic;
     variable pc_dec : std_logic;
@@ -3268,6 +3336,9 @@ begin
                 reg_dmagic_addr <= reg_dmagic_addr + 1;
               end if;
               report "DMAgic: Reading DMA list (end of cycle)";
+
+              -- Flush out DMAgic read pipeline while we read the DMA list
+              dmagic_do_memory_access;
             when DMAgicGetReady =>
               report "DMAgic: got list: cmd=$"
                 & to_hstring(dmagic_cmd)
@@ -3288,101 +3359,36 @@ begin
               dmagic_dest_hold <= dmagic_dest_bank_temp(4);
               case dmagic_cmd(1 downto 0) is                
                 when "11" => -- fill
-                  state <= DMAgicFill;
+                  state <= DMAgicCopy;
                 when "00" => -- copy
                   dmagic_first_read <= '1';
-                  state <= DMagicCopyRead;
+                  state <= DMagicCopy;
                 when others =>
                   -- swap and mix not yet implemented
                   state <= normal_fetch_state;
               end case;
-            when DMAgicFill =>
-              -- Fill memory at dmagic_dest_addr with dmagic_src_addr(7 downto
-              -- 0)
+            when DMAgicCopy =>
+              -- DMA copy involves a 2-byte pipeline, to allow every cycle to be
+              -- actively used, but to also use the unified DMAgic memory pipeline
+              -- that helps minimise the logic depth on the memory access
+              -- critical path for the CPU.
+              -- Essentially if we have data to write, we write it, else we
+              -- read data, unless we have run out of bytes to read. When we have
+              -- written the correct number of bytes, we stop.
 
-              -- Do memory write
-              memory_access_write := '1';
-              memory_access_wdata := dmagic_src_addr(7 downto 0);
-              memory_access_resolve_address := '0';
-              memory_access_address := dmagic_dest_addr;
-
-              -- redirect memory write to IO block if required
-              if dmagic_dest_addr(15 downto 12) = x"d" and dmagic_dest_io='1' then
-                memory_access_address(27 downto 12) := x"FFD3";
-              end if;
-              
-              -- Update address and check for end of job.
-              -- XXX Ignores modulus, whose behaviour is insufficiently defined
-              -- in the C65 specifications document
-              if dmagic_dest_hold='0' then
-                if dmagic_dest_direction='0' then
-                  dmagic_dest_addr <= dmagic_dest_addr + 1;
+              dmagic_do_memory_access;
+                            
+              if (dmagic_cmd(1 downto 0) = "11") or
+                (dmagic_memory_read_buffer_ready = '1') then
+                -- Data ready to be written
+                if (dmagic_cmd(1 downto 0) = "11") then -- fill
+                  dmagic_schedule_write_value(dmagic_dest_addr,
+                                              dmagic_src_addr(7 downto 0));
                 else
-                  dmagic_dest_addr <= dmagic_dest_addr - 1;
+                  dmagic_schedule_write_value(dmagic_dest_addr,
+                                              dmagic_memory_read_buffer);
                 end if;
-              end if;
-              -- XXX we compare count with 1 before decrementing.
-              -- This means a count of zero is really a count of 64KB, which is
-              -- probably different to on a real C65, but this is untested.
-              if dmagic_count = 1 then
-                -- DMA done
-                report "DMAgic: DMA complete";
-                if dmagic_cmd(2) = '0' then
-                  -- Last DMA job in chain, go back to executing instructions
-                  state <= normal_fetch_state;
-                else
-                  -- Chain to next DMA job
-                  state <= DMAgicTrigger;
-                end if;
-              else
-                dmagic_count <= dmagic_count - 1;
-              end if;
-            when DMAgicCopyRead =>
-              -- We can't write a value the immediate cycle we read it, so
-              -- we need to read one byte ahead, so that we have a 1 byte buffer
-              -- and can read or write on every cycle.
-              -- so we need to read the first byte now.
 
-              -- Do memory read
-              memory_access_read := '1';
-              memory_access_resolve_address := '0';
-              memory_access_address := dmagic_src_addr;
-
-              -- redirect memory write to IO block if required
-              if dmagic_src_addr(15 downto 12) = x"d" and dmagic_src_io='1' then
-                memory_access_address(27 downto 12) := x"FFD3";
-              end if;
-              
-              -- Update source address.
-              -- XXX Ignores modulus, whose behaviour is insufficiently defined
-              -- in the C65 specifications document
-              if dmagic_src_hold='0' then
-                if dmagic_src_direction='0' then
-                  dmagic_src_addr <= dmagic_src_addr + 1;
-                else
-                  dmagic_src_addr <= dmagic_src_addr - 1;
-                end if;
-              end if;
-              state <= DMAgicCopyWrite;
-            when DMAgicCopyWrite =>
-              -- Remember value just read
-              dmagic_first_read <= '0';
-              reg_t <= memory_read_value;
-
-              state <= DMAgicCopyRead;
-
-              if dmagic_first_read = '0' then
-                -- Do memory write
-                memory_access_write := '1';
-                memory_access_wdata := reg_t;
-                memory_access_resolve_address := '0';
-                memory_access_address := dmagic_dest_addr;
-
-                -- redirect memory write to IO block if required
-                if dmagic_dest_addr(15 downto 12) = x"d" and dmagic_dest_io='1' then
-                  memory_access_address(27 downto 12) := x"FFD3";
-                end if;
-              
                 -- Update address and check for end of job.
                 -- XXX Ignores modulus, whose behaviour is insufficiently defined
                 -- in the C65 specifications document
@@ -3409,7 +3415,31 @@ begin
                 else
                   dmagic_count <= dmagic_count - 1;
                 end if;
+              else
+                -- Read next byte
+                dmagic_schedule_read_value(dmagic_src_addr);
+
+                -- Update source address.
+                -- XXX Ignores modulus, whose behaviour is insufficiently defined
+                -- in the C65 specifications document
+                if dmagic_src_hold='0' then
+                  if dmagic_src_direction='0' then
+                    dmagic_src_addr <= dmagic_src_addr + 1;
+                  else
+                    dmagic_src_addr <= dmagic_src_addr - 1;
+                  end if;
+                end if;
               end if;
+              -- Do memory read
+              memory_access_read := '1';
+              memory_access_resolve_address := '0';
+              memory_access_address := dmagic_src_addr;
+
+              -- redirect memory write to IO block if required
+              if dmagic_src_addr(15 downto 12) = x"d" and dmagic_src_io='1' then
+                memory_access_address(27 downto 12) := x"FFD3";
+              end if;              
+              state <= DMAgicCopy;
             when InstructionWait =>
               state <= InstructionFetch;
             when InstructionFetch =>
