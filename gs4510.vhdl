@@ -510,8 +510,6 @@ end component;
   signal pop_y : std_logic := '0';
   signal pop_z : std_logic := '0';
   signal mem_reading_p : std_logic := '0';
-  -- serial monitor is reading data 
-  signal monitor_mem_reading : std_logic := '0';
 
   -- Is CPU free to proceed with processing an instruction?
   signal proceed : std_logic := '1';
@@ -829,6 +827,7 @@ constant mode_lut : mlut9bit := (
   signal monitor_mem_setpc_drive : std_logic;
   signal monitor_mem_address_drive : unsigned(27 downto 0);
   signal monitor_mem_wdata_drive : unsigned(7 downto 0);
+  signal monitor_dma_wait_counter : integer range 0 to 7;
 
   signal debugging_single_stepping : std_logic := '0';
   signal debug_count : integer range 0 to 5 := 0;
@@ -3025,7 +3024,6 @@ begin
           if mem_reading='1' then
 --            report "resetting mem_reading (read $" & to_hstring(memory_read_value) & ")" severity note;
             mem_reading <= '0';
-            monitor_mem_reading <= '0';
           end if;
 
           proceed <= '1';
@@ -3187,17 +3185,21 @@ begin
               
               if monitor_mem_attention_request_drive='1' then
                 -- Memory access by serial monitor.
+                -- Use DMAgic memory pipeline to ease critial path for memory system
+                -- (adds 3 cycle delay)
                 if monitor_mem_address_drive(27 downto 16) = x"777" then
                   -- M777xxxx in serial monitor reads memory from CPU's perspective
-                  memory_access_resolve_address := '1';
+                  dmagic_memory_access_resolve_address <= '1';
                 else
-                  memory_access_resolve_address := '0';
+                  dmagic_memory_access_resolve_address <= '0';
                 end if;
+                
                 if monitor_mem_write_drive='1' then
                   -- Write to specified long address (or short if address is $777xxxx)
-                  memory_access_address := unsigned(monitor_mem_address_drive);
-                  memory_access_write := '1';
-                  memory_access_wdata := monitor_mem_wdata_drive;
+                  dmagic_memory_access_address <= unsigned(monitor_mem_address_drive);
+                  dmagic_memory_access_write <= '1';
+                  dmagic_memory_access_wdata <= monitor_mem_wdata_drive;
+                  dmagic_memory_access_requested <= '1';
                   state <= MonitorMemoryAccess;
                 -- Don't allow a read to occur while a write is completing.
                 elsif monitor_mem_read='1' then
@@ -3212,11 +3214,11 @@ begin
                     mem_reading <= '0';
                   else
                     -- otherwise just read from memory
-                    memory_access_address := unsigned(monitor_mem_address_drive);
-                    memory_access_read := '1';
+                    dmagic_memory_access_address <= unsigned(monitor_mem_address_drive);
+                    dmagic_memory_access_write <= '0';
+                    dmagic_memory_access_requested <= '1';
+
                     -- Read from specified long address
-                    monitor_mem_reading <= '1';
-                    mem_reading <= '1';
                     proceed <= '0';
                     state <= MonitorMemoryAccess;
                   end if;
@@ -3226,13 +3228,22 @@ begin
                 memory_access_write := '0';
                 memory_access_read := '0';
               end if;
+              -- Allow 4 cycles for DMAgic memory read to percolate through
+              monitor_dma_wait_counter <= 4;
             when MonitorMemoryAccess =>
-              monitor_mem_rdata <= memory_read_value;
-              if monitor_mem_attention_request_drive='1' then 
-                monitor_mem_attention_granted <= '1';
+              dmagic_do_memory_access;
+              if monitor_dma_wait_counter = 0 then
+                if dmagic_memory_read_buffer_ready = '1' then
+                  monitor_mem_rdata <= dmagic_memory_read_buffer;
+                end if;
+                if monitor_mem_attention_request_drive='1' then 
+                  monitor_mem_attention_granted <= '1';
+                else
+                  monitor_mem_attention_granted <= '0';
+                  state <= ProcessorHold;
+                end if;
               else
-                monitor_mem_attention_granted <= '0';
-                state <= ProcessorHold;
+                monitor_dma_wait_counter <= monitor_dma_wait_counter - 1;
               end if;
             when TrapToHypervisor =>
               -- Save all registers
