@@ -611,6 +611,13 @@ begin
       state <= Reseting;
       key_state <= 0;
       trace_continuous <= '0';
+
+      monitor_mem_read <= '1';
+      monitor_mem_write <= '0';
+      monitor_mem_address <= to_unsigned(1024,28);
+      timeout <= 65535;
+      cpu_transaction(Reseting);
+
     elsif rising_edge(clock) then
 
       -- Allow a hardware switch to force stopping of the CPU
