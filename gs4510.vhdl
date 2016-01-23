@@ -1711,6 +1711,9 @@ begin
         when DMAgicRegister =>
           -- Actually, this is all of $D700-$D7FF decoded by the CPU at present
           case the_read_address(7 downto 0) is
+            when x"00" => return reg_dmagic_addr(7 downto 0);
+            when x"01" => return reg_dmagic_addr(15 downto 8);
+            when x"02" => return '0'&reg_dmagic_addr(22 downto 16);
             when x"03" => return reg_dmagic_status;
             when others => return x"ff";
           end case;
@@ -3228,8 +3231,8 @@ begin
                 memory_access_write := '0';
                 memory_access_read := '0';
               end if;
-              -- Allow 4 cycles for DMAgic memory read to percolate through
-              monitor_dma_wait_counter <= 4;
+              -- Allow 3 cycles for DMAgic memory read to percolate through
+              monitor_dma_wait_counter <= 3;
             when MonitorMemoryAccess =>
               dmagic_do_memory_access;
               if monitor_dma_wait_counter = 0 then
@@ -3391,6 +3394,7 @@ begin
                   state <= DMagicCopy;
                 when others =>
                   -- swap and mix not yet implemented
+                  report "Aborting SWAP or MIX DMAgic job (not implemented)";
                   state <= normal_fetch_state;
               end case;
             when DMAgicCopy =>
