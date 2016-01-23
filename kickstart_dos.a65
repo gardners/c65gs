@@ -1455,7 +1455,6 @@ drce_next_piece:
 drce2:	lda (<dos_scratch_vector),y
 	beq drce_eot_in_filename
 	sta dos_dirent_longfilename,x
-	stx dos_dirent_longfilename_length
 	inx
 	; protect against over-long LFNs
 	cpx #$40
@@ -1474,7 +1473,6 @@ drce2:	lda (<dos_scratch_vector),y
 drce3:	lda (<dos_scratch_vector),y
 	beq drce_eot_in_filename
 	sta dos_dirent_longfilename,x
-	stx dos_dirent_longfilename_length
 	inx
 	; protect against over-long LFNs
 	cpx #$40
@@ -1493,7 +1491,6 @@ drce3:	lda (<dos_scratch_vector),y
 drce4:	lda (<dos_scratch_vector),y
 	beq drce_eot_in_filename
 	sta dos_dirent_longfilename,x
-	stx dos_dirent_longfilename_length
 	inx
 	; protect against over-long LFNs
 	cpx #$40
@@ -1566,9 +1563,6 @@ drce_shortname:
 	cmp #$e5
 	beq drd_deleted_or_invalid_entry
 
-	jsr checkpoint
-	.byte 0,"drce_shortname <2>",0
-
 	ldx #$00
 drce5:	lda (<dos_scratch_vector),y
 	sta dos_dirent_shortfilename,x
@@ -1576,9 +1570,6 @@ drce5:	lda (<dos_scratch_vector),y
 	iny
 	cpx #11
 	bne drce5
-
-	jsr checkpoint
-	.byte 0,"drce5",0
 
 	; If we have no long name, copy it also to long name, inserting "." between
 	; name and extension as required.
@@ -1621,8 +1612,6 @@ drce6:	lda (<dos_scratch_vector),y
 	cpx #[8+1+3]
 	bne drce6
     drce_copied_extension:
-	jsr checkpoint
-	.byte 0,"drce_copied_extension",0
 
 	; null terminate short name for convenience in our debugging
 	lda #$00
@@ -1631,9 +1620,6 @@ drce6:	lda (<dos_scratch_vector),y
 	stx dos_dirent_longfilename_length
 
 drce_already_have_long_name:
-
-	jsr checkpoint
-	.byte 0,"drce_already_have_long_name",0
 
 	; now copy attribute field and other useful data
 
@@ -1667,14 +1653,8 @@ drce_fl:
 	lda (<dos_scratch_vector),y
 	sta dos_dirent_type_and_attribs
 
-	jsr checkpoint
-	.byte 0,"drce_fl <1>",0
-
 	jsr dos_readdir_advance_to_next_entry
 	bcs drce_noteof
-
-	jsr checkpoint
-	.byte 0,"drce_fl <2>",0
 
 	; We need to pass the error through here to indicate EOF in directory,
 	; but in a way that can be defered to the next call to dos_readdir, because
@@ -1690,9 +1670,6 @@ drce_fl:
 
 drce_noteof:
 
-	jsr checkpoint
-	.byte 0,"drce_noteof",0
-
 	; Ignore zero-length filenames (corresponding to empty directory entries)
 	lda dos_dirent_longfilename_length
 	cmp #0
@@ -1703,12 +1680,19 @@ drce_noteof:
 	cmp #$00
 	beq dos_readdir
 
+	pha
+	jsr checkpoint
+	.byte 0,"Returning the following entry:",0
+	lda #9
+	jsr lfndebug
+	pla
+
 	sec
 	rts
 
 lfndebug:
 	ora #$30
-	sta fnmsg1-4
+	sta fnmsgid
 	
 	; Show what we have in the filename so far
 	phx
@@ -1719,14 +1703,22 @@ drce23:	lda dos_dirent_longfilename,x
 drce22:	sta fnmsg1,x
 	dex
 	bpl drce23
-	plx
 
+	ldx dos_dirent_longfilename_length
+	jsr checkpoint_bytetohex
+	sty fnmsglen+0
+	stx fnmsglen+1
 
 	jsr checkpoint
-	.byte 0,"LFN(1): "
+	.byte 0,"LFN"
+fnmsgid:
+	.byte "1: $"
+fnmsglen:
+	.byte "xx "
 fnmsg1:
 	.byte "..............................",0
 
+	plx
 	rts
 
 drd_deleted_or_invalid_entry:
