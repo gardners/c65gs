@@ -6,8 +6,6 @@
 
     .org $c000
 	 
-    .scope
-
     .include "diskmenu.a65"
 
     .checkpc $CE00
@@ -17,3 +15,5 @@
     .checkpc $CF06
     .advance $CF06
     .incbin "etherload.prg"
+
+    .scend

@@ -904,8 +904,6 @@ joysticktable:
 	.byte $0d,$0d,$0d,$0d,$0d,$0d,$0d,$0d
 	.byte $0d,$0d,$0d,$0d,$0d,$0d,$0d,$0d
 
-	.scend
-
 iter1:	 .byte 0
 
 diskcount:     .byte 0,0
