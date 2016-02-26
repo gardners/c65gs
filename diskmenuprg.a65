@@ -13,3 +13,5 @@ _next:	 .word 0
 	 .advance 2079
 
 	 .include "diskmenu.a65"
+
+	.scend
