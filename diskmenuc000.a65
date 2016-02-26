@@ -5,6 +5,8 @@
     .outfile "diskmenu_c000.bin"
 
     .org $c000
+
+    .scope
 	 
     .include "diskmenu.a65"
 
