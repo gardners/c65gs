@@ -42,9 +42,11 @@ C64 $D019.0 VIC-II raster compare indicate or acknowledge
 C64 $D019.1 VIC-II sprite:bitmap collision indicate or acknowledge
 C64 $D019.2 VIC-II sprite:sprite collision indicate or acknowledge
 C64 $D01A compatibility IRQ mask bits
-C64 $D01A.2 VIC-II mask raster IRQ
-C64 $D01A.2 VIC-II mask sprite:bitmap colission IRQ
+C64 $D01A.0 VIC-II mask vertical raster IRQ
+C64 $D01A.1 VIC-II mask sprite:bitmap colission IRQ
 C64 $D01A.2 VIC-II mask sprite:sprite colission IRQ
+GS $D01A.4 - Horizontal Raster Interrupt mask (VIC-IV mode only)
+GS $D01A.4 VIC-IV mask horizontal raster IRQ (VIC-IV IO mode only)
 C64 $D01B VIC-II sprite background priority bits
 C64 $D01C VIC-II sprite multicolour enable bits
 C64 $D01D VIC-II sprite horizontal expansion enable bits
@@ -134,8 +136,8 @@ GS $D04D.7-4 VIC-IV sprite 3-0 horizontal tile enables
 GS $D04E VIC-IV character generator vertical position (LSB)
 GS $D04F.3-0 VIC-IV character generator vertical position (MSB)
 GS $D04F.7-4 VIC-IV sprite 7-4 horizontal tile enables
-GS $D050 VIC-IV read horizontal position (LSB)
-GS $D051 VIC-IV read horizontal position (MSB)
+GS $D050 VIC-IV read horizontal position/set horizontal raster compare (LSB)
+GS $D051 VIC-IV read horizontal position/set horizontal raster compare (MSB)
 GS $D052 VIC-IV read physical raster/set raster compare (LSB)
 GS $D053 VIC-IV read physical raster/set raster compare (MSB)
 GS $D054 VIC-IV Control register C

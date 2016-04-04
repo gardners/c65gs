@@ -337,6 +337,8 @@ architecture Behavioral of viciv is
   end component;
 
   signal reset_drive : std_logic;
+
+  signal viciii_iomode_internal : std_logic_vector(1 downto 0) := "00";
   
   signal iomode_set_toggle_last : std_logic := '0';    
 
@@ -729,6 +731,7 @@ architecture Behavioral of viciv is
   signal twentyfourlines : std_logic := '0';
   signal thirtyeightcolumns : std_logic := '0';
   signal vicii_raster_compare : unsigned(10 downto 0);
+  signal viciv_xraster_compare : unsigned(11 downto 0);
   signal vicii_x_smoothscroll : unsigned(2 downto 0);
   signal vicii_y_smoothscroll : unsigned(2 downto 0);
   -- NOTE: these are here for reading. the actual used VIC-II sprite
@@ -754,12 +757,15 @@ architecture Behavioral of viciv is
   signal irq_colissionspritesprite : std_logic := '0';
   signal irq_colissionspritebitmap : std_logic := '0';
   signal irq_raster : std_logic := '0';
+  signal irq_xraster : std_logic := '0';
   signal ack_colissionspritesprite : std_logic := '0';
   signal ack_colissionspritebitmap : std_logic := '0';
   signal ack_raster : std_logic := '0';
+  signal ack_xraster : std_logic := '0';
   signal mask_colissionspritesprite : std_logic := '0';
   signal mask_colissionspritebitmap : std_logic := '0';
   signal mask_raster : std_logic := '0';
+  signal mask_xraster : std_logic := '0';
   signal clear_colissionspritebitmap : std_logic := '0';
   signal clear_colissionspritebitmap_1 : std_logic := '0';
   signal clear_colissionspritesprite : std_logic := '0';
@@ -1428,10 +1434,15 @@ begin
           fastio_rdata(1) <= irq_colissionspritebitmap;
           fastio_rdata(0) <= irq_raster;
         elsif register_number=26 then          -- $D01A compatibility IRQ mask bits
+          -- @IO:GS $D01A.4 - Horizontal Raster Interrupt mask (VIC-IV mode only)
           fastio_rdata(7) <= '1';       -- NC
           fastio_rdata(6) <= '1';       -- NC
           fastio_rdata(5) <= '1';       -- NC
-          fastio_rdata(4) <= '1';       -- NC
+          if viciii_iomode_internal = "11" then
+            fastio_rdata(4) <= mask_xraster;
+          else
+            fastio_rdata(4) <= '1';       -- NC
+          end if;
           fastio_rdata(3) <= '1';       -- lightpen
           fastio_rdata(2) <= mask_colissionspritesprite;
           fastio_rdata(1) <= mask_colissionspritebitmap;
@@ -1709,6 +1720,7 @@ begin
       if iomode_set_toggle /= iomode_set_toggle_last then
         iomode_set_toggle_last <= iomode_set_toggle;
         viciii_iomode <= iomode_set;
+        viciii_iomode_internal <= iomode_set;        
       end if;
       
       viciv_fast <= viciv_fast_internal;
@@ -1749,7 +1761,7 @@ begin
       xcounter_drive <= xcounter;
       ycounter_drive <= ycounter;
       xfrontporch_drive <= xfrontporch;
-      
+
       if viciv_legacy_mode_registers_touched='1' then
         viciv_interpret_legacy_mode_registers;
         viciv_legacy_mode_registers_touched <= '0';
@@ -1907,12 +1919,15 @@ begin
           ack_raster <= fastio_wdata(0);
         elsif register_number=26 then
           -- @IO:C64 $D01A compatibility IRQ mask bits
-          -- XXX Enable/disable IRQs
+          -- @IO:GS $D01A.4 VIC-IV mask horizontal raster IRQ (VIC-IV IO mode only)
+          if viciii_iomode_internal="11" then
+            mask_xraster <= fastio_wdata(4);
+          end if;
           -- @IO:C64 $D01A.2 VIC-II mask sprite:sprite colission IRQ
           mask_colissionspritesprite <= fastio_wdata(2);
-          -- @IO:C64 $D01A.2 VIC-II mask sprite:bitmap colission IRQ
+          -- @IO:C64 $D01A.1 VIC-II mask sprite:bitmap colission IRQ
           mask_colissionspritebitmap <= fastio_wdata(1);
-          -- @IO:C64 $D01A.2 VIC-II mask raster IRQ
+          -- @IO:C64 $D01A.0 VIC-II mask vertical raster IRQ
           mask_raster <= fastio_wdata(0);
         elsif register_number=27 then
           -- @IO:C64 $D01B VIC-II sprite background priority bits
@@ -2140,13 +2155,13 @@ begin
           -- @IO:GS $D04F.7-4 VIC-IV sprite 7-4 horizontal tile enables
           sprite_horizontal_tile_enables(7 downto 4) <= fastio_wdata(7 downto 4);
         elsif register_number=80 then
-          -- @IO:GS $D050 VIC-IV read horizontal position (LSB)
+          -- @IO:GS $D050 VIC-IV read horizontal position/set horizontal raster compare (LSB)
                     -- xcounter
-          null;
+          viciv_xraster_compare(7 downto 0) <= unsigned(fastio_wdata);
         elsif register_number=81 then
-          -- @IO:GS $D051 VIC-IV read horizontal position (MSB)
+          -- @IO:GS $D051 VIC-IV read horizontal position/set horizontal raster compare (MSB)
                     -- xcounter
-          null;
+          viciv_xraster_compare(11 downto 8) <= unsigned(fastio_wdata(3 downto 0));
         elsif register_number=82 then
           -- @IO:GS $D052 VIC-IV read physical raster/set raster compare (LSB)
           -- Allow setting of fine raster for IRQ (low bits)
@@ -2374,14 +2389,21 @@ begin
       end if;
       
       -- Acknowledge IRQs after reading $D019     
+      irq_xraster <= irq_xraster and (not ack_xraster);
       irq_raster <= irq_raster and (not ack_raster);
       irq_colissionspritebitmap <= irq_colissionspritebitmap and (not ack_colissionspritebitmap);
       irq_colissionspritesprite <= irq_colissionspritesprite and (not ack_colissionspritesprite);
       -- Set IRQ line status to CPU
       irq_drive <= not ((irq_raster and mask_raster)
+                        or (irq_xraster and mask_xraster)
                         or (irq_colissionspritebitmap and mask_colissionspritebitmap)
                         or (irq_colissionspritesprite and mask_colissionspritesprite));
 
+      -- Allow horizontal raster triggering.
+      if (xcounter_drive = viciv_xraster_compare) then
+        irq_xraster <= '1';
+      end if;     
+      
       -- reset masks IRQs immediately
       if irq_drive = '0' then
         irq <= '0';
