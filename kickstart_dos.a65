@@ -1916,16 +1916,19 @@ dos_file_read_current_sector:
 	tay
 	ldx #$00
 	clc
+	php
 	lda dos_file_descriptors,y
 	bne dfrcs4
 dfrcs2: lda #$00
-dfrcs4:
+dfrcs4:	plp
 	adc $d681,x
 	sta $d681,x
 	bcc dfrcs_inced
+	php
 	inx
 	cpx #$04
 	bne dfrcs2
+	plp
 dfrcs_inced:
 
 	jsr sd_fix_sectornumber

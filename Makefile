@@ -35,17 +35,17 @@ f011test.prg:	f011test.a65 Makefile
 	../Ophis/bin/ophis -4 f011test.a65
 
 diskmenu.prg:	diskmenuprg.a65 diskmenu.a65 Makefile
-	../Ophis/bin/ophis -4 diskmenuprg.a65 -l diskmenuprg.list
+	../Ophis/bin/ophis -4 diskmenuprg.a65 -l diskmenuprg.list -m diskmenunprg.map
 
 diskchooser:	diskchooser.a65 etherload.prg Makefile
-	../Ophis/bin/ophis -4 diskchooser.a65 -l diskchooser.list
+	../Ophis/bin/ophis -4 diskchooser.a65 -l diskchooser.list -m diskchooser.map
 
 version.a65:	*.vhdl *.a65 *.vhd Makefile
 	./version.sh
 
 # diskmenu_c000.bin yet b0rken
 kickstart65gs.bin:	$(KICKSTARTSRCS) Makefile diskchooser version.a65 diskmenu_c000.bin
-	../Ophis/bin/ophis -4 kickstart.a65 -l kickstart.list
+	../Ophis/bin/ophis -4 kickstart.a65 -l kickstart.list -m kickstart.map
 
 diskmenu_c000.bin:	diskmenuc000.a65 diskmenu.a65 etherload.prg diskmenu_sort.a65
 	../Ophis/bin/ophis -4 diskmenuc000.a65 -l diskmenuc000.list
@@ -93,8 +93,9 @@ version.vhdl: version-template.vhdl version.sh .git/index *.vhdl *.vhd
 
 SIMULATIONFILES=	viciv.vhdl bitplanes.vhdl bitplane.vhdl cputypes.vhdl sid_voice.vhd sid_coeffs.vhd sid_filters.vhd sid_components.vhd version.vhdl kickstart.vhdl iomapper.vhdl container.vhd cpu_test.vhdl gs4510.vhdl UART_TX_CTRL.vhd uart_rx.vhdl uart_monitor.vhdl machine.vhdl cia6526.vhdl c65uart.vhdl keymapper.vhdl ghdl_ram8x32k.vhdl charrom.vhdl ghdl_chipram8bit.vhdl ghdl_screen_ram_buffer.vhdl ghdl_ram9x4k.vhdl ghdl_ram18x2k.vhdl sdcardio.vhdl ghdl_ram8x512.vhdl ethernet.vhdl ramlatch64.vhdl shadowram.vhdl cputypes.vhdl version.vhdl sid_6581.vhd ghdl_ram128x1k.vhdl ghdl_ram8x4096.vhdl crc.vhdl slowram.vhdl framepacker.vhdl ghdl_videobuffer.vhdl vicii_sprites.vhdl sprite.vhdl ghdl_alpha_blend.vhdl ghdl_farstack.vhdl debugtools.vhdl
 simulate:	$(SIMULATIONFILES)
+	ghdl --remove
 	ghdl -i $(SIMULATIONFILES) 
-	ghdl -m cpu_test
+	ghdl -m -g cpu_test
 
 testcia:	tb_cia.vhdl cia6526.vhdl debugtools.vhdl
 	ghdl -c tb_cia.vhdl cia6526.vhdl debugtools.vhdl -r tb_cia
